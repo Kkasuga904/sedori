@@ -1,0 +1,41 @@
+amazon:
+  marketplace_id: "A1VC38T7YXB528"
+  region: "JP"
+  lwa_client_id: "YOUR_LWA_CLIENT_ID"
+  lwa_client_secret: "YOUR_LWA_CLIENT_SECRET"
+  refresh_token: "YOUR_REFRESH_TOKEN"
+  aws_access_key: "YOUR_AWS_ACCESS_KEY"
+  aws_secret_key: "YOUR_AWS_SECRET_KEY"
+  role_arn: "YOUR_ROLE_ARN"
+
+keepa:
+  api_key: "YOUR_KEEPA_API_KEY"
+
+notifications:
+  slack:
+    webhook_urls:
+      - "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+  line:
+    channel_access_token: "YOUR_LINE_CHANNEL_TOKEN"
+    user_ids:
+      - "USER_ID_1"
+
+google_sheets:
+  credentials_file: "config/env/google-service-account.json"
+  spreadsheet_id: "YOUR_SPREADSHEET_ID"
+  worksheet_name: "Listings"
+
+listing:
+  seller_central_url: "https://sellercentral.amazon.co.jp/"
+  username: "YOUR_EMAIL"
+  password: "YOUR_PASSWORD"
+
+thresholds:
+  minimum_profit: 500
+  minimum_roi: 0.15
+  max_rank: 50000
+
+runtime:
+  default_currency: "JPY"
+  max_retries: 3
+  retry_backoff_seconds: 5
