@@ -15,9 +15,12 @@
 
 notify:
   slack:
+    enabled: false
     channel: "#sedori-decisions"
-    webhook: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
-    token: "YOUR_SLACK_TOKEN"
+    token: ""
+  line:
+    enabled: false
+    token: ""
 
 thresholds:
   min_profit: "500"

@@ -56,13 +56,20 @@ class ThresholdSettings(BaseModel):
 
 
 class SlackSettings(BaseModel):
+    enabled: bool = False
     channel: Optional[str] = None
     webhook: Optional[str] = None
-    token: Optional[str] = None
+    token: Optional[SecretStr] = None
+
+
+class LineSettings(BaseModel):
+    enabled: bool = False
+    token: Optional[SecretStr] = None
 
 
 class NotifySettings(BaseModel):
     slack: SlackSettings = Field(default_factory=SlackSettings)
+    line: LineSettings = Field(default_factory=LineSettings)
 
 
 class GoogleSheetsSettings(BaseModel):
@@ -129,10 +136,15 @@ class Settings(BaseModel):
             "keepa_api_key": self.api.keepa.api_key.get_secret_value(),
         }
         slack = self.notify.slack
-        if slack.token:
-            secrets["slack_token"] = slack.token
+        slack_token = slack.token.get_secret_value() if slack.token else None
+        if slack_token:
+            secrets["slack_token"] = slack_token
         if slack.webhook:
             secrets["slack_webhook"] = slack.webhook
+        line = self.notify.line
+        line_token = line.token.get_secret_value() if line.token else None
+        if line_token:
+            secrets["line_token"] = line_token
         return {key: value for key, value in secrets.items() if value}
 
 

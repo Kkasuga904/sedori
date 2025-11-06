@@ -64,7 +64,10 @@ def build_settings() -> Settings:
                 },
                 "keepa": {"api_key": "dummy", "domain": 5},
             },
-            "notify": {"slack": {"channel": None, "webhook": None, "token": None}},
+            "notify": {
+                "slack": {"enabled": False, "channel": None, "webhook": None, "token": None},
+                "line": {"enabled": False, "token": None},
+            },
             "thresholds": {"min_profit": "500", "min_roi": "0.15", "max_rank": 50000},
             "retry": {"max_attempts": 2, "base": 0.01, "max_sleep": 0.02},
             "cache": {"ttl_seconds": 1, "cleanup_interval": 1},

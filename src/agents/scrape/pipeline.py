@@ -5,7 +5,7 @@ import logging
 import random
 import time
 import uuid
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
@@ -27,7 +27,7 @@ from src.common.rate_limit import CircuitBreaker, KeySemaphore, RequestBudget
 from src.services.amazon_sp_api import AmazonSPAPIClient, AmazonSPAPIError
 from src.services.google_sheets import GoogleSheetsError, GoogleSheetsService
 from src.services.keepa_api import KeepaAPIClient, KeepaAPIError
-from src.services.notification import NotificationError, NotificationService
+from src.services.notifier import NotificationError, Notifier
 from src.services.profit_calculator import ProfitComputationError, calculate_profit
 from src.services.sp_auth import SellingPartnerAuthenticator, TokenAcquisitionError
 
@@ -85,7 +85,7 @@ class ScrapeAgent:
             semaphore=self._keepa_semaphore,
             circuit_breaker=self._keepa_circuit,
         )
-        self._notification_service = NotificationService(self._settings.notify.model_dump())
+        self._notifier = Notifier(self._settings.notify.slack, self._settings.notify.line, self._settings.retry)
 
         if self._settings.google_sheets:
             try:
@@ -111,6 +111,7 @@ class ScrapeAgent:
         fx_spread_override: Optional[int] = None,
         return_rate_override: Optional[Decimal] = None,
         notify_slack: bool = False,
+        notify_line: bool = False,
         dry_run: bool = False,
         decision_path: Optional[Path] = None,
         request_id: Optional[str] = None,
@@ -206,8 +207,16 @@ class ScrapeAgent:
         if decision_path:
             decision_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        if notify_slack and not dry_run:
-            self._notify_slack(decision, listing, profit_analysis, request_id, decision_path)
+        reasons = result["flags"].get("reasons", [])
+        if decision.meets_thresholds and not dry_run and (notify_slack or notify_line):
+            summary = self._build_summary(listing, profit_analysis, reasons)
+            self._dispatch_notifications(
+                summary,
+                notify_slack=notify_slack,
+                notify_line=notify_line,
+                request_id=request_id,
+                asin=listing.asin,
+            )
 
         if decision.meets_thresholds and not dry_run and self._sheets_service:
             try:
@@ -308,27 +317,54 @@ class ScrapeAgent:
             currency=keepa_snapshot.currency,
         )
 
-    def _notify_slack(
+    def _dispatch_notifications(
         self,
-        decision: PurchaseDecision,
+        summary: str,
+        notify_slack: bool,
+        notify_line: bool,
+        request_id: str,
+        asin: str,
+    ) -> None:
+        errors = []
+        if notify_slack:
+            try:
+                self._notifier.post_slack(summary)
+            except NotificationError as exc:
+                errors.append(f"slack: {exc}")
+        if notify_line:
+            try:
+                self._notifier.post_line(summary)
+            except NotificationError as exc:
+                errors.append(f"line: {exc}")
+        if errors:
+            extra_logger(__name__, request_id=request_id, asin=asin).error("Notification failed: %s", "; ".join(errors))
+
+    def _build_summary(
+        self,
         listing: ProductListing,
         profit: ProfitAnalysis,
-        request_id: str,
-        decision_path: Optional[Path],
-    ) -> None:
-        title = "BUY" if decision.meets_thresholds else "SKIP"
-        summary = (
-            f"Decision {title} for {listing.asin} profit={profit.profit} ROI={profit.roi} "
-            f"request_id={request_id}."
-        )
-        if decision_path:
-            summary += f" JSON: {decision_path}"
-        else:
-            summary += " JSON emitted via CLI output"
+        reasons: Sequence[str],
+    ) -> str:
+        selling_price = self._format_currency(profit.selling_price)
+        profit_value = self._format_currency(profit.profit)
+        roi_value = self._format_roi(profit.roi)
+        primary_reason = reasons[0] if reasons else "thresholds_met"
+        return f"ASIN: {listing.asin} | {selling_price} | profit {profit_value} | ROI {roi_value} | reason: {primary_reason}"
+
+    def _format_currency(self, amount: Decimal) -> str:
+        quantum = self._settings.money.rounding
         try:
-            self._notification_service.notify(title, summary)
-        except NotificationError as exc:
-            extra_logger(__name__, request_id=request_id, asin=listing.asin).error("Notification failed: %s", exc)
+            quantized = amount.quantize(quantum)
+        except (InvalidOperation, ValueError):
+            quantized = amount
+        return f"¥{format(quantized, 'f')}"
+
+    @staticmethod
+    def _format_roi(roi: Decimal) -> str:
+        try:
+            return f"{float(roi):.1%}"
+        except (TypeError, ValueError, OverflowError):
+            return "0.0%"
 
     def _build_result(
         self,

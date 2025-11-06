@@ -43,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env", help="Environment override (matches config/env/<env>.yml).")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output.")
     parser.add_argument("--notify-slack", action="store_true", help="Send Slack notification when thresholds pass.")
+    parser.add_argument("--notify-line", action="store_true", help="Send LINE notification when thresholds pass.")
     parser.add_argument("--dry-run", action="store_true", help="Resolve data without triggering notifications or side-effects.")
     parser.add_argument("--decision-path", type=Path, help="Optional path to write the decision JSON artifact.")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
@@ -88,6 +89,7 @@ def main() -> None:
         fx_spread_override=args.fx_spread_bp,
         return_rate_override=args.return_rate,
         notify_slack=args.notify_slack,
+        notify_line=args.notify_line,
         dry_run=args.dry_run,
         decision_path=decision_path,
         request_id=request_id,

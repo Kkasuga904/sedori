@@ -6,6 +6,8 @@ This codebase targets CLI-driven automation for the sedori pipeline. Place execu
 ## Build, Test, and Development Commands
 Create a virtual environment with `python -m venv .venv` and activate it before installing tooling. Install dependencies via `pip install -r requirements.txt`. Run agents locally with `python -m agents.cli --task scrape --category electronics` to exercise the CLI entry point. Validate the full suite with `pytest` and add `pytest --cov=src` before opening a PR. Use `ruff format src tests` and `ruff check src tests` (or the equivalent `make format` / `make lint` targets) prior to committing.
 
+- Use `--notify-slack` or `--notify-line` when running `python -m agents.cli` to emit BUY summaries to Slack or LINE Notify; enable the channel in `config/settings.yml` and supply tokens or the `LINE_NOTIFY_TOKEN` environment variable.
+
 ## Coding Style & Naming Conventions
 Follow PEP 8 with four-space indentation and type hints on public functions. Name modules and packages in snake_case, classes in CapWords, and CLI-facing commands with hyphenated verbs (`profit-check`). Keep functions below 50 lines; promote shared logic into helpers in `src/common/`. Document non-obvious behavior with concise docstrings and inline comments only where business logic is opaque. Run `ruff` and `black` (or `make format`) before pushing.
 
