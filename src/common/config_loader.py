@@ -1,11 +1,15 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import functools
 import logging
+import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import yaml
+from pydantic import ValidationError
+
+from src.common.config import Settings
 
 
 logger = logging.getLogger(__name__)
@@ -16,20 +20,8 @@ class ConfigError(RuntimeError):
 
 
 @functools.lru_cache(maxsize=1)
-def load_settings(env: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Load project configuration with optional environment-specific overrides.
-
-    Args:
-        env: Optional environment name (e.g. ``dev`` or ``staging``) used to
-            locate a file in ``config/env/<env>.yml`` that extends the defaults.
-
-    Returns:
-        Nested dictionary containing configuration values.
-
-    Raises:
-        ConfigError: If the configuration files cannot be read or are invalid.
-    """
+def load_settings(env: Optional[str] = None) -> Settings:
+    """Load configuration from disk, environment overrides, and validate."""
 
     base_path = Path(__file__).resolve().parents[2]
     defaults_path = base_path / "config" / "settings.yml"
@@ -39,7 +31,7 @@ def load_settings(env: Optional[str] = None) -> Dict[str, Any]:
     try:
         with defaults_path.open("r", encoding="utf-8") as handle:
             settings: Dict[str, Any] = yaml.safe_load(handle) or {}
-    except yaml.YAMLError as exc:
+    except yaml.YAMLError as exc:  # pragma: no cover - YAML parsing errors are rare
         raise ConfigError(f"Invalid YAML in {defaults_path}: {exc}") from exc
     except OSError as exc:
         raise ConfigError(f"Could not read {defaults_path}: {exc}") from exc
@@ -58,7 +50,32 @@ def load_settings(env: Optional[str] = None) -> Dict[str, Any]:
         else:
             logger.warning("Environment override %s not found at %s", env, env_path)
 
-    return settings
+    _apply_env_overrides(settings, os.environ)
+
+    try:
+        return Settings.model_validate(settings)
+    except ValidationError as exc:
+        raise ConfigError(f"Configuration validation error: {exc}") from exc
+
+
+def _apply_env_overrides(settings: Dict[str, Any], environ: Mapping[str, str]) -> None:
+    """Apply environment variables prefixed with ``SEDORI__`` as overrides."""
+
+    prefix = "SEDORI__"
+    for key, value in environ.items():
+        if not key.startswith(prefix):
+            continue
+        path = key[len(prefix) :].lower().split("__")
+        _assign_nested(settings, path, value)
+
+
+def _assign_nested(target: Dict[str, Any], path: list[str], value: Any) -> None:
+    cursor = target
+    for segment in path[:-1]:
+        if segment not in cursor or not isinstance(cursor[segment], dict):
+            cursor[segment] = {}
+        cursor = cursor[segment]
+    cursor[path[-1]] = value
 
 
 def _deep_update(destination: Dict[str, Any], source: Dict[str, Any]) -> None:
@@ -73,4 +90,3 @@ def _deep_update(destination: Dict[str, Any], source: Dict[str, Any]) -> None:
             _deep_update(destination[key], value)
         else:
             destination[key] = value
-

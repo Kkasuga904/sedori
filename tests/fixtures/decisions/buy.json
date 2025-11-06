@@ -1,0 +1,106 @@
+{
+  "request_id": "test-buy",
+  "inputs": {
+    "asin": "TESTASIN",
+    "barcode": null,
+    "purchase_cost": "2400",
+    "selling_price": "4800"
+  },
+  "sources": {
+    "keepa": {
+      "flags": {
+        "degraded": false,
+        "cached": false,
+        "circuit_open": false,
+        "reason": null
+      },
+      "snapshot": {
+        "current_price": "4500",
+        "average_price_30d": "4200",
+        "lowest_price_30d": "3800",
+        "highest_price_30d": "4700",
+        "sales_rank": 3000,
+        "currency": "JPY",
+        "title": "テスト商品",
+        "image_urls": [
+          "https://example.com/img.jpg"
+        ]
+      }
+    },
+    "competitive": {
+      "flags": {
+        "degraded": false,
+        "cached": false,
+        "circuit_open": false,
+        "reason": null
+      },
+      "offers": [
+        {
+          "condition": "New",
+          "seller_id": "SELLER1",
+          "landed_price": "4400",
+          "shipping": "0",
+          "last_updated": "2024-01-01T00:00:00+00:00"
+        }
+      ]
+    },
+    "fees": {
+      "flags": {
+        "degraded": false,
+        "cached": false,
+        "circuit_open": false,
+        "reason": null
+      },
+      "breakdown": {
+        "referral_fee": "480.00",
+        "closing_fee": "0.00",
+        "fba_fee": "250.00",
+        "inbound_shipping": "120.00",
+        "packaging_materials": "80.00",
+        "storage_fee": "50.00",
+        "taxes": "30.00",
+        "fx_spread": "57.60",
+        "returns_cost": "192.00",
+        "other_costs": "0.00",
+        "total": "1259.60"
+      }
+    }
+  },
+  "calc": {
+    "selling_price": "4800.00",
+    "purchase_cost": "2400.00",
+    "total_cost": "3659.60",
+    "fees": {
+      "referral_fee": "480.00",
+      "closing_fee": "0.00",
+      "fba_fee": "250.00",
+      "inbound_shipping": "120.00",
+      "packaging_materials": "80.00",
+      "storage_fee": "50.00",
+      "taxes": "30.00",
+      "fx_spread": "57.60",
+      "returns_cost": "192.00",
+      "other_costs": "0.00",
+      "total": "1259.60"
+    },
+    "profit": "1140.40",
+    "roi": "0.4752",
+    "margin": "0.2376"
+  },
+  "thresholds": {
+    "min_profit": "500",
+    "min_roi": "0.15",
+    "max_rank": 50000
+  },
+  "flags": {
+    "degraded": false,
+    "cached": false,
+    "circuit_open": false,
+    "reasons": []
+  },
+  "decision": {
+    "buy": true,
+    "profitable": true,
+    "reasons": []
+  }
+}

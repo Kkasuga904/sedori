@@ -1,0 +1,106 @@
+{
+  "request_id": "test-nobuy",
+  "inputs": {
+    "asin": "SLOWASIN",
+    "barcode": null,
+    "purchase_cost": "2500",
+    "selling_price": "3200"
+  },
+  "sources": {
+    "keepa": {
+      "flags": {
+        "degraded": false,
+        "cached": false,
+        "circuit_open": false,
+        "reason": null
+      },
+      "snapshot": {
+        "current_price": "3000",
+        "average_price_30d": "3100",
+        "lowest_price_30d": "2800",
+        "highest_price_30d": "3300",
+        "sales_rank": 999999,
+        "currency": "JPY",
+        "title": "Slow Seller",
+        "image_urls": []
+      }
+    },
+    "competitive": {
+      "flags": {
+        "degraded": false,
+        "cached": false,
+        "circuit_open": false,
+        "reason": null
+      },
+      "offers": []
+    },
+    "fees": {
+      "flags": {
+        "degraded": false,
+        "cached": false,
+        "circuit_open": false,
+        "reason": null
+      },
+      "breakdown": {
+        "referral_fee": "200.00",
+        "closing_fee": "0.00",
+        "fba_fee": "150.00",
+        "inbound_shipping": "120.00",
+        "packaging_materials": "80.00",
+        "storage_fee": "50.00",
+        "taxes": "20.00",
+        "fx_spread": "38.40",
+        "returns_cost": "128.00",
+        "other_costs": "0.00",
+        "total": "786.40"
+      }
+    }
+  },
+  "calc": {
+    "selling_price": "3200.00",
+    "purchase_cost": "2500.00",
+    "total_cost": "3286.40",
+    "fees": {
+      "referral_fee": "200.00",
+      "closing_fee": "0.00",
+      "fba_fee": "150.00",
+      "inbound_shipping": "120.00",
+      "packaging_materials": "80.00",
+      "storage_fee": "50.00",
+      "taxes": "20.00",
+      "fx_spread": "38.40",
+      "returns_cost": "128.00",
+      "other_costs": "0.00",
+      "total": "786.40"
+    },
+    "profit": "-86.40",
+    "roi": "-0.0346",
+    "margin": "-0.0270"
+  },
+  "thresholds": {
+    "min_profit": "500",
+    "min_roi": "0.15",
+    "max_rank": 50000
+  },
+  "flags": {
+    "degraded": false,
+    "cached": false,
+    "circuit_open": false,
+    "reasons": [
+      "no_competitive_offers",
+      "profit_below_threshold",
+      "rank_above_threshold",
+      "roi_below_threshold"
+    ]
+  },
+  "decision": {
+    "buy": false,
+    "profitable": false,
+    "reasons": [
+      "no_competitive_offers",
+      "profit_below_threshold",
+      "rank_above_threshold",
+      "roi_below_threshold"
+    ]
+  }
+}

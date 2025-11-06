@@ -1,10 +1,12 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import logging
 from typing import Dict, Iterable, Optional
 
 import requests
+
+REQUEST_TIMEOUT = (2.0, 5.0)
 
 
 logger = logging.getLogger(__name__)
@@ -52,7 +54,7 @@ class NotificationService:
         }
         for webhook in self._slack_webhooks:
             try:
-                response = requests.post(webhook, json=body, timeout=10)
+                response = requests.post(webhook, json=body, timeout=REQUEST_TIMEOUT)
                 response.raise_for_status()
             except requests.RequestException as exc:
                 logger.error("Slack notification failed for %s: %s", webhook, exc)
@@ -68,10 +70,12 @@ class NotificationService:
                     "https://api.line.me/v2/bot/message/push",
                     headers=headers,
                     json=payload,
-                    timeout=10,
+                    timeout=REQUEST_TIMEOUT,
                 )
                 response.raise_for_status()
             except requests.RequestException as exc:
                 logger.error("LINE notification failed for %s: %s", user_id, exc)
                 raise NotificationError(f"LINE notification failed: {exc}") from exc
+
+
 

@@ -1,0 +1,110 @@
+{
+  "request_id": "test-degraded",
+  "inputs": {
+    "asin": "DEGRADED",
+    "barcode": null,
+    "purchase_cost": "1000",
+    "selling_price": "1500"
+  },
+  "sources": {
+    "keepa": {
+      "flags": {
+        "degraded": true,
+        "cached": true,
+        "circuit_open": false,
+        "reason": "keepa_cache"
+      },
+      "snapshot": {
+        "current_price": "0",
+        "average_price_30d": "0",
+        "lowest_price_30d": "0",
+        "highest_price_30d": "0",
+        "sales_rank": null,
+        "currency": "JPY",
+        "title": null,
+        "image_urls": []
+      }
+    },
+    "competitive": {
+      "flags": {
+        "degraded": true,
+        "cached": false,
+        "circuit_open": false,
+        "reason": "spapi_pricing_error"
+      },
+      "offers": []
+    },
+    "fees": {
+      "flags": {
+        "degraded": true,
+        "cached": false,
+        "circuit_open": false,
+        "reason": "spapi_fee_error"
+      },
+      "breakdown": {
+        "referral_fee": "0.00",
+        "closing_fee": "0.00",
+        "fba_fee": "0.00",
+        "inbound_shipping": "120.00",
+        "packaging_materials": "80.00",
+        "storage_fee": "50.00",
+        "taxes": "0.00",
+        "fx_spread": "18.00",
+        "returns_cost": "60.00",
+        "other_costs": "0.00",
+        "total": "328.00"
+      }
+    }
+  },
+  "calc": {
+    "selling_price": "1500.00",
+    "purchase_cost": "1000.00",
+    "total_cost": "1328.00",
+    "fees": {
+      "referral_fee": "0.00",
+      "closing_fee": "0.00",
+      "fba_fee": "0.00",
+      "inbound_shipping": "120.00",
+      "packaging_materials": "80.00",
+      "storage_fee": "50.00",
+      "taxes": "0.00",
+      "fx_spread": "18.00",
+      "returns_cost": "60.00",
+      "other_costs": "0.00",
+      "total": "328.00"
+    },
+    "profit": "172.00",
+    "roi": "0.1720",
+    "margin": "0.1147"
+  },
+  "thresholds": {
+    "min_profit": "500",
+    "min_roi": "0.15",
+    "max_rank": 50000
+  },
+  "flags": {
+    "degraded": true,
+    "cached": true,
+    "circuit_open": false,
+    "reasons": [
+      "degraded_inputs",
+      "keepa_cache",
+      "no_competitive_offers",
+      "profit_below_threshold",
+      "spapi_fee_error",
+      "spapi_pricing_error"
+    ]
+  },
+  "decision": {
+    "buy": false,
+    "profitable": true,
+    "reasons": [
+      "degraded_inputs",
+      "keepa_cache",
+      "no_competitive_offers",
+      "profit_below_threshold",
+      "spapi_fee_error",
+      "spapi_pricing_error"
+    ]
+  }
+}

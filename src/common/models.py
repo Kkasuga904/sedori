@@ -1,9 +1,12 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Generic, List, Optional, TypeVar
+
+
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -16,6 +19,20 @@ class ProductQuery:
     def __post_init__(self) -> None:
         if not (self.asin or self.barcode):
             raise ValueError("Either asin or barcode must be provided")
+
+
+@dataclass(frozen=True)
+class ServiceFlags:
+    degraded: bool = False
+    cached: bool = False
+    circuit_open: bool = False
+    reason: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ServiceResult(Generic[T]):
+    data: Optional[T]
+    flags: ServiceFlags = field(default_factory=ServiceFlags)
 
 
 @dataclass(frozen=True)
@@ -41,11 +58,16 @@ class KeepaPriceSnapshot:
 
 @dataclass(frozen=True)
 class FeeBreakdown:
-    referral_fee: Decimal
-    closing_fee: Decimal
-    fba_fee: Decimal
-    shipping_fee: Decimal
-    taxes: Decimal
+    referral_fee: Decimal = Decimal("0")
+    closing_fee: Decimal = Decimal("0")
+    fba_fee: Decimal = Decimal("0")
+    inbound_shipping: Decimal = Decimal("0")
+    packaging_materials: Decimal = Decimal("0")
+    storage_fee: Decimal = Decimal("0")
+    taxes: Decimal = Decimal("0")
+    fx_spread: Decimal = Decimal("0")
+    returns_cost: Decimal = Decimal("0")
+    other_costs: Decimal = Decimal("0")
 
     @property
     def total(self) -> Decimal:
@@ -53,8 +75,13 @@ class FeeBreakdown:
             self.referral_fee
             + self.closing_fee
             + self.fba_fee
-            + self.shipping_fee
+            + self.inbound_shipping
+            + self.packaging_materials
+            + self.storage_fee
             + self.taxes
+            + self.fx_spread
+            + self.returns_cost
+            + self.other_costs
         )
 
 
@@ -63,6 +90,7 @@ class ProfitAnalysis:
     selling_price: Decimal
     purchase_cost: Decimal
     fees: FeeBreakdown
+    total_cost: Decimal
     profit: Decimal
     roi: Decimal
     margin: Decimal

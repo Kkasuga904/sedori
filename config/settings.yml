@@ -1,41 +1,60 @@
-amazon:
-  marketplace_id: "A1VC38T7YXB528"
-  region: "JP"
-  lwa_client_id: "YOUR_LWA_CLIENT_ID"
-  lwa_client_secret: "YOUR_LWA_CLIENT_SECRET"
-  refresh_token: "YOUR_REFRESH_TOKEN"
-  aws_access_key: "YOUR_AWS_ACCESS_KEY"
-  aws_secret_key: "YOUR_AWS_SECRET_KEY"
-  role_arn: "YOUR_ROLE_ARN"
+﻿api:
+  spapi:
+    marketplace_id: "A1VC38T7YXB528"
+    region: "JP"
+    lwa_client_id: "YOUR_LWA_CLIENT_ID"
+    lwa_client_secret: "YOUR_LWA_CLIENT_SECRET"
+    refresh_token: "YOUR_REFRESH_TOKEN"
+    aws_access_key: "YOUR_AWS_ACCESS_KEY"
+    aws_secret_key: "YOUR_AWS_SECRET_KEY"
+    role_arn: "YOUR_ROLE_ARN"
+    default_currency: "JPY"
+  keepa:
+    api_key: "YOUR_KEEPA_API_KEY"
+    domain: 5
 
-keepa:
-  api_key: "YOUR_KEEPA_API_KEY"
-
-notifications:
+notify:
   slack:
-    webhook_urls:
-      - "https://hooks.slack.com/services/XXX/YYY/ZZZ"
-  line:
-    channel_access_token: "YOUR_LINE_CHANNEL_TOKEN"
-    user_ids:
-      - "USER_ID_1"
+    channel: "#sedori-decisions"
+    webhook: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+    token: "YOUR_SLACK_TOKEN"
+
+thresholds:
+  min_profit: "500"
+  min_roi: "0.15"
+  max_rank: 50000
+
+retry:
+  max_attempts: 5
+  base: 0.5
+  max_sleep: 10
+
+cache:
+  ttl_seconds: 1800
+  cleanup_interval: 300
+
+money:
+  rounding: "0.01"
+  fx_spread_bp: 120
+  return_rate: "0.04"
+  storage_fee_monthly: "50"
+  inbound_shipping: "120"
+  packaging_materials: "80"
+
+budget:
+  spapi: 120
+  keepa: 150
+
+observability:
+  json_logs: true
+  log_level: "INFO"
+
+cli:
+  stagger_jitter_seconds: 0.4
+  spapi_max_inflight: 1
+  keepa_max_inflight: 1
 
 google_sheets:
   credentials_file: "config/env/google-service-account.json"
   spreadsheet_id: "YOUR_SPREADSHEET_ID"
   worksheet_name: "Listings"
-
-listing:
-  seller_central_url: "https://sellercentral.amazon.co.jp/"
-  username: "YOUR_EMAIL"
-  password: "YOUR_PASSWORD"
-
-thresholds:
-  minimum_profit: 500
-  minimum_roi: 0.15
-  max_rank: 50000
-
-runtime:
-  default_currency: "JPY"
-  max_retries: 3
-  retry_backoff_seconds: 5
