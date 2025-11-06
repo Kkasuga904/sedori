@@ -24,8 +24,10 @@ class SequenceSession:
         self._responses = list(responses)
         self._exceptions = list(exceptions or [])
         self.calls = 0
+        self.last_request: dict | None = None
 
     def request(self, *args, **kwargs):
+        self.last_request = {"args": args, "kwargs": kwargs}
         if self._exceptions and self.calls < len(self._exceptions):
             exc = self._exceptions[self.calls]
             self.calls += 1

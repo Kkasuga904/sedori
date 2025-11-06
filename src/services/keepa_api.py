@@ -1,13 +1,13 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from threading import Lock
-from typing import Dict, Optional
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-import pandas as pd
 import requests
 from cachetools import TTLCache
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
@@ -20,6 +20,14 @@ logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = (2.0, 5.0)
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+KEEPA_EPOCH = datetime(2011, 1, 1, tzinfo=timezone.utc)
+PRICE_SERIES_PRIORITY: Tuple[Tuple[str, ...], ...] = (
+    ("AMAZON", "0"),
+    ("NEW", "1", "NEW_FBA", "NEW_SHIPPING"),
+    ("BUY_BOX_SHIPPING", "BUY_BOX", "16"),
+)
+RANK_SERIES_KEYS: Tuple[str, ...] = ("SALES", "SALES_RANK", "RANK", "3")
+MIN_WINDOW_POINTS = 2
 
 
 class KeepaAPIError(RuntimeError):
@@ -28,6 +36,15 @@ class KeepaAPIError(RuntimeError):
 
 class RetryableKeepaError(RuntimeError):
     """Internal marker for retry-eligible failures."""
+
+
+@dataclass(frozen=True)
+class _PriceSummary:
+    current: Decimal
+    median: Decimal
+    p10: Decimal
+    p90: Decimal
+    insufficient: bool
 
 
 class KeepaAPIClient:
@@ -77,28 +94,38 @@ class KeepaAPIClient:
             raise KeepaAPIError("Keepa API response did not include product data")
 
         product = products[0]
-        stats = product.get("stats", {})
+        csv_map = _normalize_csv_map(product.get("csv"))
+        price_summary, price_flags = _build_price_summary(csv_map)
+        rank_value, rank_insufficient = _extract_rank(csv_map)
 
-        price_history = product.get("csv", [])
-        current_price, lowest, highest, average = _compute_price_stats(price_history)
-
-        image_urls = _extract_image_urls(product)
+        if price_summary is None:
+            price_summary = _PriceSummary(
+                current=Decimal("0"),
+                median=Decimal("0"),
+                p10=Decimal("0"),
+                p90=Decimal("0"),
+                insufficient=True,
+            )
 
         snapshot = KeepaPriceSnapshot(
-            current_price=current_price or Decimal("0"),
-            average_price_30d=average or Decimal("0"),
-            lowest_price_30d=lowest or Decimal("0"),
-            highest_price_30d=highest or Decimal("0"),
-            sales_rank=stats.get("salesRankDrops30") or stats.get("current_SALES"),
+            current_price=price_summary.current,
+            average_price_30d=price_summary.median,
+            lowest_price_30d=price_summary.p10,
+            highest_price_30d=price_summary.p90,
+            sales_rank=rank_value,
             currency=payload.get("currency", "JPY"),
             title=product.get("title"),
-            image_urls=image_urls,
+            image_urls=_extract_image_urls(product),
         )
+
+        flags = _merge_flags(outcome.flags, price_flags)
+        if rank_insufficient:
+            flags = _merge_flags(flags, ServiceFlags(degraded=True, reason="keepa_rank_insufficient"))
 
         with self._cache_lock:
             self._cache[cache_key] = snapshot
 
-        return ServiceResult(data=snapshot, flags=outcome.flags)
+        return ServiceResult(data=snapshot, flags=flags)
 
     def _budget_key(self) -> str:
         digest = hashlib.sha1(self._settings.api_key.get_secret_value().encode("utf-8")).hexdigest()[:6]
@@ -181,46 +208,175 @@ class KeepaAPIClient:
         return payload
 
 
-def _compute_price_stats(
-    price_history: Optional[list],
-) -> tuple[Optional[Decimal], Optional[Decimal], Optional[Decimal], Optional[Decimal]]:
-    """
-    Keepa returns CSV-encoded price history; convert to statistics using pandas.
-    """
+def _normalize_csv_map(csv_raw: object) -> Dict[str, Sequence[int]]:
+    if isinstance(csv_raw, dict):
+        normalized: Dict[str, Sequence[int]] = {}
+        for key, value in csv_raw.items():
+            if isinstance(value, Sequence):
+                normalized[str(key).upper()] = value
+        return normalized
+    if isinstance(csv_raw, list):
+        return {"DEFAULT": csv_raw}
+    return {}
 
-    if not price_history:
-        return None, None, None, None
 
-    records = []
+def _build_price_summary(csv_map: Dict[str, Sequence[int]]) -> tuple[Optional[_PriceSummary], ServiceFlags]:
+    series = _select_series(csv_map, PRICE_SERIES_PRIORITY)
+    if not series:
+        return None, ServiceFlags(degraded=True, reason="keepa_insufficient_data")
+
+    points = _decode_compact_series(series)
+    if not points:
+        return None, ServiceFlags(degraded=True, reason="keepa_insufficient_data")
+
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=30)
-    for datapoint in price_history:
+    window_points = [(ts, value) for ts, value in points if ts >= cutoff and value > 0]
+    insufficient_window = len(window_points) < MIN_WINDOW_POINTS
+    if not window_points:
+        window_points = [(ts, value) for ts, value in points if value > 0]
+
+    if not window_points:
+        return None, ServiceFlags(degraded=True, reason="keepa_insufficient_data")
+
+    prices = [_quantize_price(value) for _, value in window_points]
+    prices_sorted = sorted(prices)
+    median = _median_decimal(prices_sorted)
+    p10 = _percentile_decimal(prices_sorted, 0.10)
+    p90 = _percentile_decimal(prices_sorted, 0.90)
+    latest_price = _latest_price(points) or prices_sorted[-1]
+
+    summary = _PriceSummary(
+        current=latest_price,
+        median=median,
+        p10=p10,
+        p90=p90,
+        insufficient=insufficient_window,
+    )
+    flags = ServiceFlags(degraded=summary.insufficient, reason="keepa_insufficient_data" if summary.insufficient else None)
+    return summary, flags
+
+
+def _extract_rank(csv_map: Dict[str, Sequence[int]]) -> tuple[Optional[int], bool]:
+    series = _select_series(csv_map, (RANK_SERIES_KEYS,))
+    if not series:
+        return None, True
+
+    points = _decode_compact_series(series)
+    if not points:
+        return None, True
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=30)
+    window_ranks = [value for ts, value in points if ts >= cutoff and value > 0]
+    latest_rank = _latest_positive(points)
+    if latest_rank is None and window_ranks:
+        latest_rank = _median_int(window_ranks)
+    insufficient = not window_ranks
+    return latest_rank, insufficient
+
+
+def _select_series(csv_map: Dict[str, Sequence[int]], priority: Iterable[Tuple[str, ...]]) -> Optional[Sequence[int]]:
+    for aliases in priority:
+        for alias in aliases:
+            key = alias.upper()
+            if key in csv_map and csv_map[key]:
+                return csv_map[key]
+    return None
+
+
+def _decode_compact_series(series: Sequence[int]) -> List[Tuple[datetime, int]]:
+    if not isinstance(series, Sequence):
+        return []
+
+    results: List[Tuple[datetime, int]] = []
+    absolute_minutes: Optional[int] = None
+    for index in range(0, len(series), 2):
         try:
-            timestamp_minutes, price_cents = datapoint
+            minutes_component = int(series[index])
         except (TypeError, ValueError):
             continue
-        timestamp = datetime.fromtimestamp(timestamp_minutes * 60, tz=timezone.utc)
-        if timestamp < cutoff:
+        if absolute_minutes is None:
+            absolute_minutes = minutes_component
+        else:
+            absolute_minutes += minutes_component
+        if index + 1 >= len(series):
+            break
+        try:
+            value_component = int(series[index + 1])
+        except (TypeError, ValueError):
             continue
-        if price_cents < 0:
-            continue
-        price_value = Decimal(price_cents) / Decimal("100")
-        records.append({"timestamp": timestamp, "price": price_value})
+        timestamp = KEEPA_EPOCH + timedelta(minutes=absolute_minutes)
+        results.append((timestamp, value_component))
+    return results
 
-    if not records:
-        return None, None, None, None
 
-    frame = pd.DataFrame(records)
-    current_price = frame.sort_values("timestamp", ascending=False).iloc[0]["price"]
-    lowest = frame["price"].min()
-    highest = frame["price"].max()
-    average = frame["price"].mean()
+def _quantize_price(value: int) -> Decimal:
+    if value <= 0:
+        return Decimal("0")
+    amount = Decimal(value) / Decimal("100")
+    return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    return (
-        Decimal(str(current_price)),
-        Decimal(str(lowest)),
-        Decimal(str(highest)),
-        Decimal(str(average)),
+
+def _median_decimal(values: Sequence[Decimal]) -> Decimal:
+    if not values:
+        return Decimal("0")
+    sorted_values = sorted(values)
+    count = len(sorted_values)
+    mid = count // 2
+    if count % 2 == 1:
+        return sorted_values[mid]
+    avg = (sorted_values[mid - 1] + sorted_values[mid]) / Decimal("2")
+    return avg.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _percentile_decimal(values: Sequence[Decimal], percentile: float) -> Decimal:
+    if not values:
+        return Decimal("0")
+    if len(values) == 1:
+        return values[0]
+    sorted_values = sorted(values)
+    rank = (len(sorted_values) - 1) * percentile
+    lower_index = int(rank)
+    upper_index = min(lower_index + 1, len(sorted_values) - 1)
+    fraction = Decimal(str(rank - lower_index))
+    lower_value = sorted_values[lower_index]
+    upper_value = sorted_values[upper_index]
+    interpolated = lower_value + (upper_value - lower_value) * fraction
+    return interpolated.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _latest_price(points: Sequence[Tuple[datetime, int]]) -> Optional[Decimal]:
+    for _, value in sorted(points, key=lambda item: item[0], reverse=True):
+        if value > 0:
+            return _quantize_price(value)
+    return None
+
+
+def _latest_positive(points: Sequence[Tuple[datetime, int]]) -> Optional[int]:
+    for _, value in sorted(points, key=lambda item: item[0], reverse=True):
+        if value > 0:
+            return int(value)
+    return None
+
+
+def _median_int(values: Sequence[int]) -> int:
+    if not values:
+        return 0
+    sorted_values = sorted(values)
+    count = len(sorted_values)
+    mid = count // 2
+    if count % 2 == 1:
+        return sorted_values[mid]
+    return int(round((sorted_values[mid - 1] + sorted_values[mid]) / 2))
+
+
+def _merge_flags(primary: ServiceFlags, secondary: ServiceFlags) -> ServiceFlags:
+    return ServiceFlags(
+        degraded=primary.degraded or secondary.degraded,
+        cached=primary.cached or secondary.cached,
+        circuit_open=primary.circuit_open or secondary.circuit_open,
+        reason=secondary.reason or primary.reason,
     )
 
 
@@ -228,7 +384,7 @@ def _extract_image_urls(product: Dict[str, object]) -> list[str]:
     images_csv = product.get("imagesCSV") or ""
     if not isinstance(images_csv, str):
         return []
-    urls = []
+    urls: List[str] = []
     for token in images_csv.split(","):
         token = token.strip()
         if not token:
@@ -238,4 +394,3 @@ def _extract_image_urls(product: Dict[str, object]) -> list[str]:
         else:
             urls.append(f"https://images-na.ssl-images-amazon.com/images/I/{token}.jpg")
     return urls
-
